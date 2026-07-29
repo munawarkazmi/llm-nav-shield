@@ -27,6 +27,14 @@ recovery gains nothing from D* Lite's incremental machinery (the core's own
 tests prove both return equally optimal paths); D* Lite sits ready for the
 dynamic-replanning extension.
 
+## The decision flow
+
+![Shield decision flow](docs/figures/shield_flow.svg)
+
+Design diagram: the outcome names are the pre-registered buckets from
+[src/shield_main.cpp](src/shield_main.cpp); the counts live in
+[Results](#results), not in the picture.
+
 ## The decision gate
 
 A proposal is forwarded only when it is **both** verifier-safe **and** ends
