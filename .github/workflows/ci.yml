@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shield:
+    name: Build + replay shield evaluation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # Fails on any fallback_unsafe or any sealed-goal violation - the
+      # two guarantees the shield claims are enforced on every push.
+      - name: Build and evaluate
+        run: |
+          make
+          mkdir -p /tmp/results
+          build/shield --out /tmp/results/shield_eval_ci.csv
+
+      - name: Upload CI evaluation data
+        uses: actions/upload-artifact@v4
+        with:
+          name: shield-eval-ci
+          path: /tmp/results/shield_eval_ci.csv

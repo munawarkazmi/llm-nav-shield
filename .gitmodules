@@ -1,0 +1,6 @@
+[submodule "deps/planning"]
+	path = deps/planning
+	url = https://github.com/munawarkazmi/ros2-dynamic-path-planning.git
+[submodule "deps/verifier"]
+	path = deps/verifier
+	url = https://github.com/munawarkazmi/ros2-llm-safety-verifier.git
