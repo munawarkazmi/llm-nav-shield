@@ -76,6 +76,17 @@ shield decision time: median 0.48 ms, max 1.40 ms (verify + plan + re-verify, x8
 PASS: no unsafe fallback forwarded; every sealed goal produced a halt, not an invention
 ```
 
+![Shield outcomes](docs/figures/shield_outcomes.png)
+
+The two branches that define the system, drawn from committed artifacts
+([tools/render_figures.py](tools/render_figures.py) regenerates every figure
+from the evaluation's own dumps - the recovery paths and sealed grids the
+run produced, not re-derived approximations):
+
+![Detect and recover](docs/figures/shield_recovery.png)
+
+![The halt branch](docs/figures/shield_halt.png)
+
 Read precisely - facts about one 7B model at one temperature on n=40, plus
 ten constructed halt cases:
 

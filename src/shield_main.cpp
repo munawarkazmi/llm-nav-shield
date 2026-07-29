@@ -177,7 +177,24 @@ struct Outcome {
   std::string bucket;
   double ms;
   std::size_t fallback_waypoints;
+  verifier::Trajectory fallback;  // empty unless a recovery was produced
 };
+
+// ---- optional dump support (--dump-dir): the committed artifacts the
+// figure-rendering script draws from, so every figure derives from
+// exactly what the evaluation computed ----
+
+void writeTrajectory(const std::string& path, const verifier::Trajectory& t) {
+  std::ofstream f(path);
+  for (const auto& p : t) f << p.x << ' ' << p.y << '\n';
+}
+
+void writeCostPgm(const std::string& path, const verifier::Grid& g) {
+  std::ofstream f(path, std::ios::binary);
+  f << "P5\n" << g.width() << ' ' << g.height() << "\n255\n";
+  f.write(reinterpret_cast<const char*>(g.data().data()),
+          static_cast<std::streamsize>(g.data().size()));
+}
 
 // The shield decision for one proposal on one map.
 Outcome runShield(const verifier::Grid& grid, const Record& r,
@@ -213,9 +230,9 @@ Outcome runShield(const verifier::Grid& grid, const Record& r,
                        std::hypot(fallback.back().x - r.goal.x,
                                   fallback.back().y - r.goal.y) <= 0.3;
   if (fb_verdict.safe && oracle_safe && at_goal) {
-    return {recovery_bucket, elapsed(), fallback.size()};
+    return {recovery_bucket, elapsed(), fallback.size(), fallback};
   }
-  return {"fallback_unsafe", elapsed(), fallback.size()};
+  return {"fallback_unsafe", elapsed(), fallback.size(), fallback};
 }
 
 }  // namespace
@@ -224,11 +241,13 @@ int main(int argc, char** argv) {
   std::string parsed = "deps/verifier/llm_eval/parsed/qwen2.5-7b-instruct.txt";
   std::string scen_dir = "deps/verifier/llm_eval/scenarios";
   std::string out = "reports/results/shield_eval.csv";
+  std::string dump_dir;
   for (int i = 1; i + 1 < argc; i += 2) {
     const std::string k = argv[i], v = argv[i + 1];
     if (k == "--parsed") parsed = v;
     else if (k == "--scenarios") scen_dir = v;
     else if (k == "--out") out = v;
+    else if (k == "--dump-dir") dump_dir = v;
     else { std::fprintf(stderr, "unknown arg %s\n", k.c_str()); return 2; }
   }
 
@@ -267,6 +286,11 @@ int main(int argc, char** argv) {
     else ++fallback_unsafe;
     csv << r.scenario << ",qwen," << o.bucket << ',' << o.ms << ','
         << o.fallback_waypoints << '\n';
+    if (!dump_dir.empty() && !o.fallback.empty()) {
+      char p[512];
+      std::snprintf(p, sizeof p, "%s/fallback_%02d.txt", dump_dir.c_str(), r.scenario);
+      writeTrajectory(p, o.fallback);
+    }
 
     // Sealed-goal halt suite over the first kHaltSuiteN scenarios.
     if (r.scenario < kHaltSuiteN) {
@@ -276,6 +300,11 @@ int main(int argc, char** argv) {
       else ++halt_violations;
       csv << r.scenario << ",sealed_goal," << ho.bucket << ',' << ho.ms << ','
           << ho.fallback_waypoints << '\n';
+      if (!dump_dir.empty()) {
+        char p[512];
+        std::snprintf(p, sizeof p, "%s/sealed_%02d.pgm", dump_dir.c_str(), r.scenario);
+        writeCostPgm(p, sealed);
+      }
     }
   }
 
