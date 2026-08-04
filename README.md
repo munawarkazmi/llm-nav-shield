@@ -110,6 +110,15 @@ ten constructed halt cases:
 - The whole decision - verify, plan, re-verify twice - takes a median
   **0.48 ms** on x86-64. Timing varies with hardware; the counts do not.
 
+## Plain-language guide
+
+For a non-specialist reader there is a six-page guide,
+[docs/explainer/explainer.pdf](docs/explainer/explainer.pdf), which walks
+the three outcomes end to end, quotes the real proposal that changed the
+decision gate, and explains why the halt branch is the one that matters.
+Its source is committed alongside it and builds with `latexmk -pdf
+explainer.tex`.
+
 ## Reproduce
 
 ```bash
