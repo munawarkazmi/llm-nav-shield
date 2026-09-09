@@ -14,6 +14,11 @@ jobs:
         with:
           submodules: true
 
+      # Boundary and frame handling on maps the committed dataset cannot
+      # produce: free border cells, and grids away from the world origin.
+      - name: Regression tests
+        run: make test
+
       # Fails on any fallback_unsafe or any sealed-goal violation - the
       # two guarantees the shield claims are enforced on every push.
       - name: Build and evaluate

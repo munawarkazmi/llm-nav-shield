@@ -124,12 +124,20 @@ explainer.tex`.
 ```bash
 git clone --recurse-submodules https://github.com/munawarkazmi/llm-nav-shield.git
 cd llm-nav-shield
+make test
 make eval
 ```
 
 No model inference, no GPU, no API: the evaluation replays the committed
 upstream dataset deterministically on any CPU. CI does the same on every
 push and fails on any `fallback_unsafe` or sealed-goal violation.
+
+`make test` covers the two map properties the committed scenarios cannot
+exercise, because every one of them has a walled border and sits at the
+world origin: a costmap whose edge cells are free, where a recovery may
+hug the boundary and leave the map under the robot's footprint, and a
+grid placed anywhere else in the world. Both run in CI alongside the
+replay.
 
 ## How this fits the research program
 

@@ -369,6 +369,10 @@ Outcome runShield(const verifier::Grid& grid, const Record& r,
 
 }  // namespace
 
+// tests/test_shield.cpp includes this file to reach the helpers above,
+// which have internal linkage, and defines its own entry point.
+#ifndef SHIELD_NO_MAIN
+
 int main(int argc, char** argv) {
   std::string parsed = "deps/verifier/llm_eval/parsed/qwen2.5-7b-instruct.txt";
   std::string scen_dir = "deps/verifier/llm_eval/scenarios";
@@ -494,3 +498,5 @@ int main(int argc, char** argv) {
                          : "FAIL: shield violated a safety guarantee");
   return ok ? 0 : 1;
 }
+
+#endif  // SHIELD_NO_MAIN
