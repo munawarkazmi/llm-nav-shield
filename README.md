@@ -170,9 +170,37 @@ goal-reaching in 39 scenarios, against 1 of 40 single-scan and 2 of 40
 synthetic. 18 of 39 had no safe route at all, because accumulating scans
 builds walls that a single scan leaves as unknown gaps.
 
-Neither bag has a map frame or localisation, so drift is unbounded and
-nothing here tests loop closure. Neither robot is under closed-loop
-control.
+### With localisation
+
+A third bag ([reports/results/bag_map_summary.txt](reports/results/bag_map_summary.txt),
+derived by [tools/bag_map_scenarios.py](tools/bag_map_scenarios.py)) is a
+PR2 at the Willow Garage cafe whose transform tree carries a live map
+frame: 6344 `map` to `odom_combined` updates in 322 s, 439 of them larger
+than 10 mm, the largest 104.7 mm, which is two costmap cells.
+
+That allows the question only localisation can pose. For each of the 30
+largest corrections, two costmaps are built from the same scans, one at
+the robot's pose just before the jump and one just after, so the world
+shifts underneath the robot by exactly the correction. Whatever plan the
+shield forwarded on the first map is then re-verified against the second.
+
+**5 of 26 plans the shield had verified as safe no longer verified after
+the correction.** All five had no replacement available either, so the
+shield halts rather than forwarding anything.
+
+That is the fail-safe direction, and it is the design working: the shield
+does not forward a stale plan, it re-verifies and refuses. But it only
+does so when something asks it to. This pipeline verifies once, when a
+proposal arrives, and nothing re-checks a plan because localisation moved
+the map underneath it. At 439 corrections in 322 seconds a forwarded plan
+meets one roughly every 0.7 s.
+
+Correction size does not predict which plans break. The five that broke
+saw a mean correction of 54.6 mm against 70.5 mm for those that survived;
+what separates them is how much of the map moved, 6.38% of cells against
+2.97%. A guard built on correction magnitude would watch the wrong number.
+
+None of the three bags is closed-loop: no robot ever reacts to a halt.
 
 ## Plain-language guide
 

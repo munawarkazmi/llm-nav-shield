@@ -1,0 +1,99 @@
+llm-nav-shield: what a localisation correction does to a verified plan
+======================================================================
+
+The two earlier bag replays work in the odom frame, where drift
+accumulates and nothing corrects it. This one uses a bag whose transform
+tree carries a live map frame, which allows the question that only
+localisation can pose: when the localiser jumps, does a plan the shield
+already passed stay safe?
+
+Data (not committed; tools/bag_map_scenarios.py derives everything):
+  wg-cafe.bag, PR2 at the Willow Garage cafe
+  http://download.ros.org/data/graph_slam/wg-cafe.bag
+  31.6 MB, 322 s, 81 transform pairs
+  base_scan: Hokuyo, 1040 beams, 259.8 deg, 0.02 to 60 m
+
+  map -> odom_combined -> base_footprint -> base_link -> base_laser_link
+
+The bag uses the legacy tf/tfMessage type, which rosbags will not
+resolve, so tf and LaserScan are decoded from raw bytes.
+
+The localisation is live, not decorative
+----------------------------------------
+  6344 map -> odom_combined updates over 322 s
+  439 corrections above 10 mm, 229 above 20 mm
+  largest single correction 104.7 mm, roughly two costmap cells
+  0.275 m of odometry drift absorbed across the run
+
+A near miss worth recording: costmap_2d/simple_driving_test_indexed.bag
+has a textbook map -> odom -> base_footprint -> base_link -> base_laser
+chain, and its map -> odom transform never moves. 667 samples, first and
+last identical, zero updates. A map frame with no localisation behind it.
+Checking that a transform exists is not the same as checking that it
+moves.
+
+The experiment
+--------------
+For each of the 30 largest corrections, two costmaps are built from the
+same scans over the same 3 s window: one at the robot's map pose just
+before the jump, one just after. Both sit in the robot's own frame, so
+the accumulated world shifts underneath the robot by exactly the
+correction.
+
+  correction size   min 49 mm, median 58 mm, max 105 mm
+  cells moved       median 3.21%, max 13.89%
+
+The shield then runs on each before map. Whatever plan it forwarded, the
+proposal itself when it passed, or the recovery path when it did not, is
+re-verified against the after map, unchanged.
+
+Result
+------
+  before map:  5 forwarded_safe, 21 recovered_from_unsafe, 4 halted
+  plans forwarded and therefore under test: 26
+
+  still verify after the correction : 21 of 26
+  NO LONGER VERIFY                  : 5 of 26  (19%)
+
+All five that broke also had no replacement available on the corrected
+map, so the shield would halt rather than forward anything.
+
+That is the fail-safe direction and it is worth saying plainly: the
+shield does not forward a stale plan. It re-verifies and refuses. But it
+only does so if something asks it to. The pipeline verifies once, when a
+proposal arrives. Nothing in it re-checks a plan because localisation
+moved the map underneath it, and at 439 corrections in 322 seconds a
+forwarded plan meets a correction roughly every 0.7 s.
+
+Correction size does not predict breakage
+-----------------------------------------
+  mean correction, broken plans : 54.6 mm
+  mean correction, intact plans : 70.5 mm
+  mean cells moved, broken      : 6.38%
+  mean cells moved, intact      : 2.97%
+
+The plans that broke saw smaller corrections than the ones that survived.
+What separates them is how much of the map the correction rearranges: a
+shift along a corridor moves few cells, one across it moves many. Any
+guard built on correction magnitude would therefore watch the wrong
+number.
+
+What this does not show
+-----------------------
+Straight-line proposals, not model output: the question is about map
+dynamics, and the recovery paths under test come from the shield's own
+planner either way. One bag, one robot, 30 corrections. The prior map is
+not in the bag, only the transform into its frame, so costmaps are still
+built from scans rather than from a stored map. Nothing here is
+closed-loop: the robot never reacts to a halt.
+
+Reproduce
+---------
+  pip install rosbags numpy
+  curl -LO http://download.ros.org/data/graph_slam/wg-cafe.bag
+  python3 tools/bag_map_scenarios.py --bag wg-cafe.bag --out /tmp/map_scen \
+      --count 30 --min-jump 0.02
+  build/shield --parsed <straight-line proposals> \
+      --scenarios /tmp/map_scen/before/scenarios --out before.csv \
+      --dump-dir /tmp/map_scen/dumps
+  # then re-verify the forwarded plans against /tmp/map_scen/after/scenarios
