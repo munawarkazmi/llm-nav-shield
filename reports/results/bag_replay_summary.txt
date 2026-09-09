@@ -1,0 +1,96 @@
+llm-nav-shield: replay on local costmaps built from a public ROS bag
+====================================================================
+
+Data (not committed; tools/bag_to_scenarios.py derives everything from it):
+  b2-2016-04-05-14-44-52.bag, Google's public Cartographer backpack_2d set
+  https://storage.googleapis.com/cartographer-public-data/bags/backpack_2d/
+  sha256 095bd3b04799a5f69158faa6c6fe3ef4f1e4b7a0b02e91e85344b0d4787f1bcb
+  89.6 MB, 360 s, horizontal_laser_2d: 1079 beams, 269.5 deg, 13205 scans
+
+Forty scans sampled evenly become forty robot-centred 10 m x 10 m local
+costmaps at 0.05 m. Rays clear the cells they cross and mark their return
+lethal; cells no ray reaches stay unknown. The robot footprint is cleared,
+as nav2's costmap does.
+
+How real maps differ from the committed synthetic forty
+-------------------------------------------------------
+                            committed 40        bag 40
+  unknown cells             0.88%               33.4% to 90.1%, median 55.0%
+  free cells on the edge    0 of 800            26 to 444, median 216
+  world origin              always (0, 0)       robot-centred
+
+Proposals
+---------
+qwen2.5:7b-instruct at temperature 0, through the upstream llm_eval
+collect.py and parse.py unmodified, same prompt template. 40/40 responses
+parsed to waypoint lists. Median 10.4 s per response on CPU.
+
+Result, interior goals (a cell the planner would accept)
+--------------------------------------------------------
+  forwarded_safe          1
+  recovered_from_unsafe   37
+  recovered_from_off_goal 1
+  halted_no_safe_path     1
+  fallback_unsafe         0
+  sealed-goal halt suite  10/10, 0 violations
+  decision time           median 2.06 ms, max 4.23 ms
+
+qwen produced a plan that was both safe and goal-reaching in 1 of 40 real
+scenarios, against 2 of 40 on the synthetic set. The model is about as
+unreliable on real costmaps as on procedural ones.
+
+Frame invariance
+----------------
+Every scenario was replayed twice, once with the window corner at the
+world origin and once at the robot-centred origin (-5, -5), with start,
+goal and every waypoint moved by the same offset.
+
+  bag suite, 40 scenarios + 10 sealed variants : 0 bucket mismatches
+  committed suite at (-5,-5), (-12.2,-8.4), (100,250) : 0 mismatches
+
+One known instability, unchanged by any of this work: at origin
+(3.75, 101.5) committed scenario 12 moves from recovered_from_off_goal to
+recovered_from_unsafe, because its waypoints sit exactly on cell
+boundaries and the world-to-map division lands one on the other side.
+Both outcomes are recoveries, so nothing unsafe is forwarded.
+
+What the boundary fix was worth, measured
+-----------------------------------------
+The pre-fix shield was rebuilt from cb88d20 and run on the same grids.
+
+  goals      proposals      recoveries   pre-fix        fixed
+                                         fallback_unsafe
+  interior   straight line  13           0              0
+  interior   qwen           39           0              0
+  edge       straight line  40 attempts  14             0
+
+Free cells on the map edge are not enough on their own to trigger the
+bug: with interior goals the pre-fix and fixed shields agree on every one
+of 40 scenarios, even with 39 recovery paths computed. The bug fires on
+goal placement. With the goal on the window boundary, where nav2 puts a
+local goal because that is where the global plan leaves the window, the
+pre-fix shield produced 14 unsafe fallbacks out of 40 and the fixed
+shield produced none, halting on all 40 instead.
+
+That halting is correct but blunt: a goal three cells from the window
+edge is not a pose the robot can occupy without its footprint leaving the
+known map. A deployment would need to project the local goal inward or
+pad the window. The shield as it stands refuses.
+
+What this does not show
+-----------------------
+A backpack lidar walked through a museum, not a wheeled robot under
+closed-loop control. The bag carries no odometry and no TF, so these are
+single-scan local windows, not accumulated maps, and nothing here tests
+transform timing or drift. Goal selection is a heuristic in
+tools/bag_to_scenarios.py, and the two policies give different answers,
+which is itself the main finding.
+
+Reproduce
+---------
+  pip install rosbags numpy
+  curl -LO https://storage.googleapis.com/cartographer-public-data/bags/backpack_2d/b2-2016-04-05-14-44-52.bag
+  python3 tools/bag_to_scenarios.py --bag b2-2016-04-05-14-44-52.bag --out /tmp/scen --count 40
+  # proposals, or reuse the committed reports/bag/parsed/*.txt
+  python3 tools/bag_replay.py --scenarios /tmp/scen \
+      --parsed reports/bag/parsed/qwen2.5-7b-instruct.txt --out /tmp/replay

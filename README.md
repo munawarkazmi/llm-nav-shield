@@ -110,6 +110,41 @@ ten constructed halt cases:
 - The whole decision - verify, plan, re-verify twice - takes a median
   **0.48 ms** on x86-64. Timing varies with hardware; the counts do not.
 
+## Replay on real sensor data
+
+The forty committed scenarios are procedurally generated: fully observed,
+walled on every side, and placed at the world origin. Real costmaps are
+none of those things, so the shield was also replayed on local costmaps
+built from a public ROS bag of 2D lidar
+([reports/results/bag_replay_summary.txt](reports/results/bag_replay_summary.txt),
+derived by [tools/bag_to_scenarios.py](tools/bag_to_scenarios.py)).
+
+|  | committed 40 | bag 40 |
+| --- | --- | --- |
+| unknown cells | 0.88% | 33.4% to 90.1%, median 55.0% |
+| free cells on the map edge | 0 of 800 | 26 to 444, median 216 |
+| world origin | always (0, 0) | robot-centred |
+
+qwen2.5:7b-instruct at temperature 0, run through the same prompt and the
+same `collect.py` and `parse.py`, produced a plan that was both safe and
+goal-reaching in **1 of 40** real scenarios against 2 of 40 synthetic
+ones. 37 were recovered from unsafe, 1 from off-goal, 1 halted, and
+`fallback_unsafe` was 0. Every scenario was replayed again at a
+robot-centred origin with start, goal and waypoints shifted to match: no
+decision changed.
+
+The measurement that justified the boundary work: the pre-fix shield,
+rebuilt from `cb88d20`, was run on the same grids. Free cells at the map
+edge are not enough on their own to trigger the bug, and with interior
+goals the two versions agree on all forty scenarios. With the goal on the
+window boundary, which is where nav2 puts a local goal because that is
+where the global plan leaves the window, the pre-fix shield produced
+**14 unsafe fallbacks out of 40** and the fixed shield produced none.
+
+A backpack lidar in a museum is not a wheeled robot under closed-loop
+control, and the bag carries no odometry or TF, so these are single-scan
+windows and nothing here tests transform timing or drift.
+
 ## Plain-language guide
 
 For a non-specialist reader there is a six-page guide,

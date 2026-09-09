@@ -1,0 +1,242 @@
+[
+  {
+    "id": 0,
+    "scan_index": 200,
+    "unknown_fraction": 0.620325,
+    "free_edge_cells": 198
+  },
+  {
+    "id": 1,
+    "scan_index": 525,
+    "unknown_fraction": 0.621,
+    "free_edge_cells": 162
+  },
+  {
+    "id": 2,
+    "scan_index": 850,
+    "unknown_fraction": 0.480875,
+    "free_edge_cells": 379
+  },
+  {
+    "id": 3,
+    "scan_index": 1175,
+    "unknown_fraction": 0.627825,
+    "free_edge_cells": 175
+  },
+  {
+    "id": 4,
+    "scan_index": 1500,
+    "unknown_fraction": 0.549525,
+    "free_edge_cells": 205
+  },
+  {
+    "id": 5,
+    "scan_index": 1825,
+    "unknown_fraction": 0.49525,
+    "free_edge_cells": 224
+  },
+  {
+    "id": 6,
+    "scan_index": 2150,
+    "unknown_fraction": 0.832325,
+    "free_edge_cells": 61
+  },
+  {
+    "id": 7,
+    "scan_index": 2475,
+    "unknown_fraction": 0.59795,
+    "free_edge_cells": 134
+  },
+  {
+    "id": 8,
+    "scan_index": 2800,
+    "unknown_fraction": 0.595525,
+    "free_edge_cells": 216
+  },
+  {
+    "id": 9,
+    "scan_index": 3125,
+    "unknown_fraction": 0.783225,
+    "free_edge_cells": 67
+  },
+  {
+    "id": 10,
+    "scan_index": 3450,
+    "unknown_fraction": 0.763225,
+    "free_edge_cells": 115
+  },
+  {
+    "id": 11,
+    "scan_index": 3775,
+    "unknown_fraction": 0.716625,
+    "free_edge_cells": 71
+  },
+  {
+    "id": 12,
+    "scan_index": 4100,
+    "unknown_fraction": 0.765175,
+    "free_edge_cells": 126
+  },
+  {
+    "id": 13,
+    "scan_index": 4425,
+    "unknown_fraction": 0.46405,
+    "free_edge_cells": 232
+  },
+  {
+    "id": 14,
+    "scan_index": 4750,
+    "unknown_fraction": 0.635225,
+    "free_edge_cells": 155
+  },
+  {
+    "id": 15,
+    "scan_index": 5075,
+    "unknown_fraction": 0.5627,
+    "free_edge_cells": 185
+  },
+  {
+    "id": 16,
+    "scan_index": 5400,
+    "unknown_fraction": 0.749225,
+    "free_edge_cells": 114
+  },
+  {
+    "id": 17,
+    "scan_index": 5725,
+    "unknown_fraction": 0.541725,
+    "free_edge_cells": 308
+  },
+  {
+    "id": 18,
+    "scan_index": 6050,
+    "unknown_fraction": 0.478825,
+    "free_edge_cells": 241
+  },
+  {
+    "id": 19,
+    "scan_index": 6375,
+    "unknown_fraction": 0.339975,
+    "free_edge_cells": 374
+  },
+  {
+    "id": 20,
+    "scan_index": 6700,
+    "unknown_fraction": 0.334025,
+    "free_edge_cells": 330
+  },
+  {
+    "id": 21,
+    "scan_index": 7025,
+    "unknown_fraction": 0.486125,
+    "free_edge_cells": 201
+  },
+  {
+    "id": 22,
+    "scan_index": 7350,
+    "unknown_fraction": 0.508975,
+    "free_edge_cells": 346
+  },
+  {
+    "id": 23,
+    "scan_index": 7675,
+    "unknown_fraction": 0.486075,
+    "free_edge_cells": 342
+  },
+  {
+    "id": 24,
+    "scan_index": 8000,
+    "unknown_fraction": 0.4776,
+    "free_edge_cells": 365
+  },
+  {
+    "id": 25,
+    "scan_index": 8325,
+    "unknown_fraction": 0.45375,
+    "free_edge_cells": 377
+  },
+  {
+    "id": 26,
+    "scan_index": 8650,
+    "unknown_fraction": 0.587575,
+    "free_edge_cells": 296
+  },
+  {
+    "id": 27,
+    "scan_index": 8975,
+    "unknown_fraction": 0.68615,
+    "free_edge_cells": 180
+  },
+  {
+    "id": 28,
+    "scan_index": 9300,
+    "unknown_fraction": 0.86595,
+    "free_edge_cells": 26
+  },
+  {
+    "id": 29,
+    "scan_index": 9625,
+    "unknown_fraction": 0.90055,
+    "free_edge_cells": 47
+  },
+  {
+    "id": 30,
+    "scan_index": 9950,
+    "unknown_fraction": 0.6277,
+    "free_edge_cells": 186
+  },
+  {
+    "id": 31,
+    "scan_index": 10275,
+    "unknown_fraction": 0.531875,
+    "free_edge_cells": 186
+  },
+  {
+    "id": 32,
+    "scan_index": 10600,
+    "unknown_fraction": 0.65795,
+    "free_edge_cells": 166
+  },
+  {
+    "id": 33,
+    "scan_index": 10925,
+    "unknown_fraction": 0.43985,
+    "free_edge_cells": 301
+  },
+  {
+    "id": 34,
+    "scan_index": 11250,
+    "unknown_fraction": 0.377,
+    "free_edge_cells": 358
+  },
+  {
+    "id": 35,
+    "scan_index": 11575,
+    "unknown_fraction": 0.370325,
+    "free_edge_cells": 287
+  },
+  {
+    "id": 36,
+    "scan_index": 11900,
+    "unknown_fraction": 0.446225,
+    "free_edge_cells": 413
+  },
+  {
+    "id": 37,
+    "scan_index": 12225,
+    "unknown_fraction": 0.537,
+    "free_edge_cells": 286
+  },
+  {
+    "id": 38,
+    "scan_index": 12550,
+    "unknown_fraction": 0.49135,
+    "free_edge_cells": 370
+  },
+  {
+    "id": 39,
+    "scan_index": 12875,
+    "unknown_fraction": 0.41905,
+    "free_edge_cells": 444
+  }
+]
