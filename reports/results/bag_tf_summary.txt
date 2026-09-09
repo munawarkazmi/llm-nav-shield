@@ -1,0 +1,115 @@
+llm-nav-shield: replay on costmaps accumulated through a real transform tree
+============================================================================
+
+The first bag replay (reports/results/bag_replay_summary.txt) used single
+scans, because that dataset has no poses. This one has them.
+
+Data (not committed; tools/bag_tf_scenarios.py derives everything from it):
+  hallway_localization.bag, Magazino TORU, from Cartographer's public set
+  https://storage.googleapis.com/cartographer-public-data/bags/toru/
+  sha256 c9af90dadb9235f2755ed82bc56e1eadb70605982a52bcdd94ecd46c5a38052c
+  40.4 MB, 137.7 s, 79024 messages, indoor warehouse hallway
+
+  /odom       nav_msgs/Odometry     13771 msgs, 100 Hz
+  /tf         tf2_msgs/TFMessage    27386 msgs, 199 Hz  (odom -> base_footprint)
+  /tf_static  tf2_msgs/TFMessage    2 msgs
+  /scan_front sensor_msgs/LaserScan 1748 msgs, 503 beams, 251 deg
+  /scan_rear  sensor_msgs/LaserScan 1748 msgs, 475 beams, 237 deg
+
+The transform chain is real and non-trivial:
+  odom -> base_footprint -> base_link -> robot_center -> base_front_laser_link
+                                                      -> base_rear_laser_link
+with the lasers half a metre off centre at -45 and +135 degrees yaw. Each
+scan is transformed through it at that scan's own pose, and 51 scans from
+both lasers are accumulated per map, so the result carries real odometry
+drift rather than one instantaneous view. The robot travels 82 m and its
+odom pose runs from (-70.4, -28.2) to (-8.7, 26.6), so every map sits far
+from the world origin and negative.
+
+  scans per map      min 50, median 51, max 52
+  unknown fraction   min 22.4%, median 44.5%, max 58.8%
+  free edge cells    min 171, median 249, max 463 of 800
+
+Transform timing
+----------------
+Scan header stamps trail their arrival by min 24.7, median 25.1, max 31.9
+ms. --stamp-policy builds each map twice: once looking the pose up at the
+scan's own stamp, once at the time the message was recorded, which is the
+error a node makes when it uses "now" instead of the message stamp.
+
+  grid cells differing   min 0.00%, median 2.64%, max 17.03%
+
+Shield decisions changed by that error alone, same proposals, same goals,
+only the map differs:
+
+  straight-line proposals   1 of 40   scenario  9  halt -> recovery
+  qwen proposals            2 of 39   scenario 11  recovery -> halt
+                                      scenario 19  recovery -> halt
+
+Roughly three to five percent of decisions flip, in both directions. The
+halt-to-recovery case is the one that matters: a mis-timed map convinced
+the shield a route existed where the correctly timed map says none does.
+The recovery was still verified safe, but against a map that was wrong.
+
+That is the limit of what this system guarantees, and it was not stated
+anywhere before this run. The shield verifies a trajectory against the
+costmap it is handed. Costmap correctness is a precondition of every
+guarantee it makes, and transform timing is part of costmap correctness.
+
+Result, qwen2.5:7b-instruct at temperature 0
+--------------------------------------------
+Same prompt template, same collect.py and parse.py. 39 of 40 responses
+parsed to waypoint lists; the fortieth is a parse failure, kept as one.
+Median 13.6 s per response on CPU.
+
+  forwarded_safe          0
+  recovered_from_unsafe   21
+  recovered_from_off_goal 0
+  halted_no_safe_path     18
+  fallback_unsafe         0
+  sealed-goal halt suite  10/10, 0 violations
+  decision time           median 2.69 ms, max 4.20 ms
+
+qwen produced no plan that was both safe and goal-reaching on any of the
+39, against 1 of 40 on single-scan real maps and 2 of 40 on the synthetic
+set. Accumulated maps are harder: 51 scans build walls that a single scan
+leaves as unknown gaps, so 18 of 39 have no safe route at all.
+
+Frame invariance
+----------------
+Every scenario replayed twice, window corner at the origin and at the
+robot-centred origin, start, goal and waypoints shifted to match.
+
+  0 bucket mismatches, with both straight-line and qwen proposals
+
+Correction to the earlier bag result
+------------------------------------
+reports/results/bag_replay_summary.txt reports that with goals on the
+window boundary the pre-fix shield produced 14 unsafe fallbacks out of 40
+and the fixed shield none. On this dataset the same comparison produces
+nothing: pre-fix and fixed both halt on all 40, zero fallback_unsafe,
+zero buckets differing, with interior goals and with edge goals alike.
+
+The accumulated hallway walls block edge goals outright, so no path is
+found and the planner never gets the chance to route along the boundary.
+On the museum-hall single-scan maps the goal was reachable that way, so
+it did. The boundary bug is real and the fix is correct, but its firing
+rate is a property of the environment, not a constant: 35% of one
+dataset, 0% of another.
+
+What this does not show
+-----------------------
+Odometry only. This bag's TF tree has no map frame and no localisation,
+so drift accumulates unbounded and nothing here tests loop closure. The
+robot is a warehouse AGV in a hallway, which is a narrower environment
+than the synthetic rooms. Goal selection remains a heuristic, and the two
+policies still disagree.
+
+Reproduce
+---------
+  pip install rosbags numpy
+  curl -LO https://storage.googleapis.com/cartographer-public-data/bags/toru/hallway_localization.bag
+  python3 tools/bag_tf_scenarios.py --bag hallway_localization.bag \
+      --out /tmp/tf_scen --count 40 --stamp-policy header
+  python3 tools/bag_replay.py --scenarios /tmp/tf_scen \
+      --parsed reports/bag_tf/parsed/qwen2.5-7b-instruct.txt --out /tmp/tf_replay

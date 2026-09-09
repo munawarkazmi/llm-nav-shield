@@ -77,6 +77,15 @@ edge is not a pose the robot can occupy without its footprint leaving the
 known map. A deployment would need to project the local goal inward or
 pad the window. The shield as it stands refuses.
 
+Later correction
+----------------
+The 14 of 40 above does not generalise. On a second bag with a transform
+tree (reports/results/bag_tf_summary.txt) the same comparison produces
+nothing: pre-fix and fixed both halt on all 40, with interior and edge
+goals alike, because accumulated hallway walls block edge goals outright
+and the planner never routes along the boundary. The bug is real and the
+fix is correct; the firing rate is a property of the environment.
+
 What this does not show
 -----------------------
 A backpack lidar walked through a museum, not a wheeled robot under

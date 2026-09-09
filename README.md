@@ -139,11 +139,40 @@ edge are not enough on their own to trigger the bug, and with interior
 goals the two versions agree on all forty scenarios. With the goal on the
 window boundary, which is where nav2 puts a local goal because that is
 where the global plan leaves the window, the pre-fix shield produced
-**14 unsafe fallbacks out of 40** and the fixed shield produced none.
+**14 unsafe fallbacks out of 40** and the fixed shield produced none. On
+the second dataset below the same comparison produces nothing at all, so
+that rate is a property of the environment rather than a constant.
 
-A backpack lidar in a museum is not a wheeled robot under closed-loop
-control, and the bag carries no odometry or TF, so these are single-scan
-windows and nothing here tests transform timing or drift.
+### With a transform tree
+
+A second bag ([reports/results/bag_tf_summary.txt](reports/results/bag_tf_summary.txt),
+derived by [tools/bag_tf_scenarios.py](tools/bag_tf_scenarios.py)) carries
+`/tf`, `/tf_static` and wheel odometry, so scans can be transformed
+through the robot's real chain and accumulated. 51 scans per map, from two
+lasers mounted half a metre off centre at 45 degrees, over 82 m of travel
+at odom poses tens of metres from the origin.
+
+Scan header stamps in that bag trail their arrival by a median 25 ms,
+which is the error a node makes when it looks a transform up at "now"
+rather than at the message stamp. Building every map both ways changes a
+median 2.64% of cells, and changes the shield's decision on 3 of 79
+replays. One of those turned a halt into a recovery: a mis-timed map
+convinced the shield a route existed where the correctly timed map says
+none does.
+
+That is the boundary of what this system guarantees. **The shield verifies
+a trajectory against the costmap it is handed, so costmap correctness is a
+precondition of every guarantee here, and transform timing is part of
+costmap correctness.**
+
+On those accumulated maps qwen produced **no** plan that was both safe and
+goal-reaching in 39 scenarios, against 1 of 40 single-scan and 2 of 40
+synthetic. 18 of 39 had no safe route at all, because accumulating scans
+builds walls that a single scan leaves as unknown gaps.
+
+Neither bag has a map frame or localisation, so drift is unbounded and
+nothing here tests loop closure. Neither robot is under closed-loop
+control.
 
 ## Plain-language guide
 
