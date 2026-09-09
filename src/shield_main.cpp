@@ -45,12 +45,20 @@
 // outcome there is a halt, and any forward or recovery on a sealed
 // variant counts as halt_suite_violation (must be 0; fails the run).
 #include <algorithm>
+#include <cctype>
+#include <charconv>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <exception>
 #include <fstream>
+#include <iterator>
 #include <optional>
+#include <sstream>
+#include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include "planning/astar.hpp"
@@ -65,20 +73,117 @@ constexpr int kHaltSuiteN = 10;
 
 // ---- committed-dataset loaders (formats owned by deps/verifier) ----
 
-std::optional<verifier::Grid> loadCostPgm(const std::string& path) {
+// A grid's raster says nothing about where it sits in the world. The
+// resolution and origin come from the scenario sidecar, or from a
+// metadata comment when the PGM carries one (writeCostPgm emits it, so
+// a dumped grid round-trips); nothing here assumes 0.05 m cells at the
+// world origin, which is true of the committed maps and of almost no
+// costmap captured from a running system.
+struct GridMeta {
+  double resolution;
+  verifier::Point origin;
+};
+
+// A PGM header comment of the form "# resolution R origin X Y". Fields
+// that are absent leave the caller's values alone.
+void parsePgmComment(const std::string& line, GridMeta& meta) {
+  std::istringstream s(line);
+  std::string tok;
+  while (s >> tok) {
+    if (tok == "resolution") {
+      double v = 0.0;
+      if (s >> v) meta.resolution = v;
+    } else if (tok == "origin") {
+      double x = 0.0, y = 0.0;
+      if (s >> x >> y) meta.origin = {x, y};
+    }
+  }
+}
+
+// Next header token, skipping comment lines. map_server and the other
+// real PGM producers emit them; the committed scenarios do not, and
+// both have to load.
+bool pgmToken(std::istream& f, std::string& tok, GridMeta& meta) {
+  while (f >> tok) {
+    if (tok.empty() || tok[0] != '#') return true;
+    std::string rest;
+    std::getline(f, rest);
+    parsePgmComment(tok.substr(1) + ' ' + rest, meta);
+  }
+  return false;
+}
+
+bool pgmNumber(std::istream& f, std::size_t& value, GridMeta& meta) {
+  std::string tok;
+  if (!pgmToken(f, tok, meta)) return false;
+  const char* const first = tok.data();
+  const char* const last = first + tok.size();
+  std::size_t v = 0;
+  const auto res = std::from_chars(first, last, v);
+  if (res.ec != std::errc{} || res.ptr != last) return false;
+  value = v;
+  return true;
+}
+
+std::optional<verifier::Grid> loadCostPgm(const std::string& path, GridMeta meta) {
   std::ifstream f(path, std::ios::binary);
   if (!f) return std::nullopt;
   std::string magic;
-  std::size_t w = 0, h = 0;
-  int maxval = 0;
-  f >> magic >> w >> h >> maxval;
-  if (magic != "P5" || w == 0 || h == 0 || maxval != 255) return std::nullopt;
-  f.get();
-  verifier::Grid g(w, h, 0.05, {0.0, 0.0});
+  std::size_t w = 0, h = 0, maxval = 0;
+  if (!pgmToken(f, magic, meta) || magic != "P5") return std::nullopt;
+  if (!pgmNumber(f, w, meta) || !pgmNumber(f, h, meta) || !pgmNumber(f, maxval, meta)) {
+    return std::nullopt;
+  }
+  if (w == 0 || h == 0 || maxval != 255) return std::nullopt;
+  f.get();  // the single whitespace byte between header and raster
+  verifier::Grid g(w, h, meta.resolution, meta.origin);
   f.read(reinterpret_cast<char*>(g.data().data()),
          static_cast<std::streamsize>(g.data().size()));
   if (!f) return std::nullopt;
   return g;
+}
+
+// The numbers following "key" in a scenario sidecar. Not a JSON parser:
+// it reads the two fields the shield needs and returns nothing when a
+// field is missing, so a missing origin keeps the caller's default
+// instead of silently asserting a frame.
+std::vector<double> jsonNumbers(const std::string& text, const std::string& key,
+                                std::size_t count) {
+  const auto k = text.find('"' + key + '"');
+  if (k == std::string::npos) return {};
+  auto i = text.find(':', k);
+  if (i == std::string::npos) return {};
+  std::vector<double> out;
+  for (++i; i < text.size() && out.size() < count;) {
+    const char c = text[i];
+    if (c == '-' || c == '+' || c == '.' || (c >= '0' && c <= '9')) {
+      std::size_t used = 0;
+      try {
+        out.push_back(std::stod(text.substr(i), &used));
+      } catch (const std::exception&) {
+        return {};
+      }
+      i += used;
+    } else if (c == '[' || c == ',' || std::isspace(static_cast<unsigned char>(c))) {
+      ++i;
+    } else {
+      break;
+    }
+  }
+  return out.size() == count ? out : std::vector<double>{};
+}
+
+GridMeta loadGridMeta(const std::string& path, GridMeta fallback) {
+  std::ifstream f(path);
+  if (!f) return fallback;
+  const std::string text((std::istreambuf_iterator<char>(f)),
+                         std::istreambuf_iterator<char>());
+  GridMeta meta = fallback;
+  const auto res = jsonNumbers(text, "resolution", 1);
+  if (!res.empty()) meta.resolution = res[0];
+  const auto org = jsonNumbers(text, "origin", 2);
+  if (!org.empty()) meta.origin = {org[0], org[1]};
+  return meta;
 }
 
 struct Record {
@@ -118,6 +223,17 @@ std::vector<Record> loadParsed(const std::string& path) {
 // the robot footprint plus one cell of margin, so any centerline path
 // the planner returns clears the footprint checks by construction.
 // Asserting that it actually does (fallback_unsafe == 0) is the point.
+//
+// Everything off the map is inflated the same way. The verifier calls a
+// footprint that pokes past the edge kOffMap, so a path hugging a free
+// boundary fails re-verification even though it touches no obstacle.
+// Inflating around obstacles alone left that gap open, and it stayed
+// closed on the committed maps for one reason only: every one of them
+// has a lethal border wall. A costmap with free cells at its edge, which
+// is what a rolling window produces on every tick, walks straight into
+// it. Treating out of bounds as lethal is the same rule applied to the
+// edge: a cell within infl of the boundary is as untraversable as a cell
+// within infl of a wall.
 planning::Grid inflatedPlanningGrid(const verifier::Grid& g, double robot_radius) {
   const double res = g.resolution();
   const auto infl = static_cast<std::int64_t>(std::ceil((robot_radius + res) / res));
@@ -137,6 +253,18 @@ planning::Grid inflatedPlanningGrid(const verifier::Grid& g, double robot_radius
           }
         }
       }
+    }
+  }
+  // The border band: cell (x, y) lies within infl of an out-of-bounds
+  // cell exactly when x < infl, y < infl, x >= width - infl, or
+  // y >= height - infl.
+  const auto w = static_cast<std::int64_t>(g.width());
+  const auto h = static_cast<std::int64_t>(g.height());
+  for (std::int64_t y = 0; y < h; ++y) {
+    for (std::int64_t x = 0; x < w; ++x) {
+      if (x >= infl && y >= infl && x < w - infl && y < h - infl) continue;
+      out.setCost(static_cast<std::size_t>(x), static_cast<std::size_t>(y),
+                  planning::kLethal);
     }
   }
   return out;
@@ -191,7 +319,11 @@ void writeTrajectory(const std::string& path, const verifier::Trajectory& t) {
 
 void writeCostPgm(const std::string& path, const verifier::Grid& g) {
   std::ofstream f(path, std::ios::binary);
-  f << "P5\n" << g.width() << ' ' << g.height() << "\n255\n";
+  // The comment keeps resolution and origin with the raster, so a dumped
+  // grid reloads and draws where it actually sits.
+  f << "P5\n# resolution " << g.resolution() << " origin " << g.origin().x << ' '
+    << g.origin().y << '\n'
+    << g.width() << ' ' << g.height() << "\n255\n";
   f.write(reinterpret_cast<const char*>(g.data().data()),
           static_cast<std::streamsize>(g.data().size()));
 }
@@ -242,13 +374,40 @@ int main(int argc, char** argv) {
   std::string scen_dir = "deps/verifier/llm_eval/scenarios";
   std::string out = "reports/results/shield_eval.csv";
   std::string dump_dir;
-  for (int i = 1; i + 1 < argc; i += 2) {
-    const std::string k = argv[i], v = argv[i + 1];
+  // Used only for maps whose sidecar does not state them. A silently
+  // wrong resolution or origin puts every waypoint in the wrong cell, so
+  // these are worth being explicit about rather than assuming.
+  GridMeta fallback_meta{0.05, {0.0, 0.0}};
+  for (int i = 1; i < argc; i += 2) {
+    const std::string k = argv[i];
+    if (i + 1 >= argc) {
+      std::fprintf(stderr, "missing value for %s\n", k.c_str());
+      return 2;
+    }
+    const std::string v = argv[i + 1];
     if (k == "--parsed") parsed = v;
     else if (k == "--scenarios") scen_dir = v;
     else if (k == "--out") out = v;
     else if (k == "--dump-dir") dump_dir = v;
+    else if (k == "--resolution" || k == "--origin-x" || k == "--origin-y") {
+      double d = 0.0;
+      try {
+        std::size_t used = 0;
+        d = std::stod(v, &used);
+        if (used != v.size()) throw std::invalid_argument(v);
+      } catch (const std::exception&) {
+        std::fprintf(stderr, "%s expects a number, got %s\n", k.c_str(), v.c_str());
+        return 2;
+      }
+      if (k == "--resolution") fallback_meta.resolution = d;
+      else if (k == "--origin-x") fallback_meta.origin.x = d;
+      else fallback_meta.origin.y = d;
+    }
     else { std::fprintf(stderr, "unknown arg %s\n", k.c_str()); return 2; }
+  }
+  if (fallback_meta.resolution <= 0.0) {
+    std::fprintf(stderr, "resolution must be positive\n");
+    return 2;
   }
 
   const verifier::Params params;  // TurtleBot3 profile, as upstream
@@ -269,9 +428,11 @@ int main(int argc, char** argv) {
 
   for (const auto& r : records) {
     if (!r.parse_ok) continue;  // upstream dataset has none; guarded anyway
-    char pgm[512];
+    char pgm[512], meta_path[512];
     std::snprintf(pgm, sizeof pgm, "%s/scenario_%02d.pgm", scen_dir.c_str(), r.scenario);
-    const auto grid = loadCostPgm(pgm);
+    std::snprintf(meta_path, sizeof meta_path, "%s/scenario_%02d.json",
+                  scen_dir.c_str(), r.scenario);
+    const auto grid = loadCostPgm(pgm, loadGridMeta(meta_path, fallback_meta));
     if (!grid) {
       std::fprintf(stderr, "missing grid %s\n", pgm);
       return 2;

@@ -33,18 +33,43 @@ MODEL_LABEL = "qwen2.5:7b-instruct (temperature 0)"
 
 
 def read_cost_pgm(path):
+    """Reads a P5 grid, honouring comment lines.
+
+    A comment of the form "# resolution R origin X Y" carries the grid's
+    place in the world, which the raster itself does not record. Grids
+    without one are 0.05 m cells at the world origin, as the committed
+    scenarios are.
+    """
     data = path.read_bytes()
-    header, _, rest = data.partition(b"255\n")
-    fields = header.split()
+    fields, res, origin, i = [], 0.05, (0.0, 0.0), 0
+    while len(fields) < 4:
+        while data[i : i + 1].isspace():
+            i += 1
+        if data[i : i + 1] == b"#":
+            end = data.index(b"\n", i)
+            parts = data[i + 1 : end].split()
+            for k, tok in enumerate(parts):
+                if tok == b"resolution" and k + 1 < len(parts):
+                    res = float(parts[k + 1])
+                elif tok == b"origin" and k + 2 < len(parts):
+                    origin = (float(parts[k + 1]), float(parts[k + 2]))
+            i = end + 1
+            continue
+        j = i
+        while not data[j : j + 1].isspace():
+            j += 1
+        fields.append(data[i:j])
+        i = j
+    i += 1
     w, h = int(fields[1]), int(fields[2])
-    return w, h, rest[: w * h]
+    return w, h, data[i : i + w * h], res, origin
 
 
 def map_image(path):
-    w, h, cells = read_cost_pgm(path)
+    w, h, cells, res, origin = read_cost_pgm(path)
     img = [[0.15 if cells[y * w + x] == 254 else (0.6 if cells[y * w + x] == 255 else 1.0)
             for x in range(w)] for y in range(h)]
-    return w, h, img
+    return w, h, img, res, origin
 
 
 def scenario(sid):
@@ -56,9 +81,11 @@ def qwen_traj(sid):
     return next(r["waypoints"] for r in parsed if r["scenario"] == sid)
 
 
-def draw_map(ax, w, h, img, res=0.05):
+def draw_map(ax, w, h, img, res=0.05, origin=(0.0, 0.0)):
     ax.imshow(img, cmap="gray", origin="lower", vmin=0, vmax=1,
-              extent=[0, w * res, 0, h * res], interpolation="nearest")
+              extent=[origin[0], origin[0] + w * res,
+                      origin[1], origin[1] + h * res],
+              interpolation="nearest")
     ax.set_xlabel("x (m)")
     ax.set_ylabel("y (m)")
 
@@ -106,13 +133,13 @@ def fig_recovery(out):
     sid = next(int(r["scenario"]) for r in rows
                if r["suite"] == "qwen" and r["bucket"] == "recovered_from_unsafe")
     scen = scenario(sid)
-    w, h, img = map_image(DEPS / "scenarios" / f"scenario_{sid:02d}.pgm")
+    w, h, img, res, origin = map_image(DEPS / "scenarios" / f"scenario_{sid:02d}.pgm")
     llm = qwen_traj(sid)
     fb = [tuple(map(float, ln.split()))
           for ln in (DUMPS / f"fallback_{sid:02d}.txt").read_text().splitlines() if ln]
 
     fig, ax = plt.subplots(figsize=(8.5, 6.5))
-    draw_map(ax, w, h, img)
+    draw_map(ax, w, h, img, res, origin)
     ax.plot([p[0] for p in llm], [p[1] for p in llm], c=RED, lw=2, ls="--",
             marker="o", ms=3, label="qwen2.5-7B proposal (rejected: unsafe)")
     ax.plot([p[0] for p in fb], [p[1] for p in fb], c=GREEN, lw=2.2,
@@ -134,11 +161,11 @@ def fig_halt(out):
     # Scenario 9: the safe-but-goes-nowhere stub, on its sealed variant.
     sid = 9
     scen = scenario(sid)
-    w, h, img = map_image(DUMPS / f"sealed_{sid:02d}.pgm")
+    w, h, img, res, origin = map_image(DUMPS / f"sealed_{sid:02d}.pgm")
     llm = qwen_traj(sid)
 
     fig, ax = plt.subplots(figsize=(8.5, 6.5))
-    draw_map(ax, w, h, img)
+    draw_map(ax, w, h, img, res, origin)
     ax.plot([p[0] for p in llm], [p[1] for p in llm], c=RED, lw=2.5, ls="--",
             marker="o", ms=5, label="qwen2.5-7B proposal (safe but never nears the goal)")
     ax.scatter([scen["start"][0]], [scen["start"][1]], c=GOLD, s=110, zorder=5,
