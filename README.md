@@ -352,10 +352,10 @@ downloaded first.
 
 ## How this fits the research program
 
-- [plan-failure-bench](https://github.com/munawarkazmi/plan-failure-bench) measures *how* LLM planners fail;
-- [ros2-llm-safety-verifier](https://github.com/munawarkazmi/ros2-llm-safety-verifier) *detects* those failures deterministically;
-- [ros2-dynamic-path-planning](https://github.com/munawarkazmi/ros2-dynamic-path-planning) plans *provably-correct* paths;
-- **this repository** closes the loop: detect, then recover with a guaranteed-safe alternative, or halt when none exists, and re-check a plan already in flight when the map beneath it moves.
+- [plan-failure-bench](https://github.com/munawarkazmi/plan-failure-bench) measures *how* LLM task planners fail: one planted trap per instruction, answers in a machine-checkable action language, every label a proof, and no human or model judging anywhere;
+- [ros2-llm-safety-verifier](https://github.com/munawarkazmi/ros2-llm-safety-verifier) *detects* unsafe trajectories deterministically, sitting between the model and Nav2;
+- [ros2-dynamic-path-planning](https://github.com/munawarkazmi/ros2-dynamic-path-planning) plans *provably-correct* paths, with A* and D* Lite measured against Dijkstra ground truth;
+- **this repository** closes the loop: detect, then recover with a guaranteed-safe alternative or halt when none exists, and re-check a plan already in flight when the map beneath it moves.
 
 ## License
 
