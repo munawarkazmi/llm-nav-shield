@@ -13,6 +13,13 @@ model was wrong, here is the correct path" and "there is no safe action,
 stop", which is the distinction safe autonomy actually requires. The term
 *shield* follows the safe-RL usage of Alshiekh et al. (AAAI 2018).
 
+A forwarded plan stays valid only against the map it was checked on, so the
+same decision can be run again on demand against a newer map: a plan that
+has gone stale is replaced, or the robot stops. Everything here is replayed
+on the committed synthetic scenarios and on costmaps built from three
+public ROS bags, which is where most of what the synthetic set cannot show
+turned up.
+
 This repository is deliberately a **composition of already-verified
 components**, pinned as git submodules at exact commits:
 
@@ -57,7 +64,7 @@ published results):
 | Bucket | Meaning |
 | --- | --- |
 | `forwarded_safe` | LLM plan safe and at the goal; forwarded untouched |
-| `recovered_from_unsafe` | LLM plan unsafe; fallback re-verified safe by verifier **and** oracle, and goal-reaching |
+| `recovered_from_unsafe` | LLM plan unsafe; fallback re-verified safe by the verifier **and** a second pass at four times the sampling density, and goal-reaching |
 | `recovered_from_off_goal` | LLM plan safe but off-goal; fallback as above |
 | `halted_no_safe_path` | no safe path exists; halt rather than invent |
 | `fallback_unsafe` | **the load-bearing cell** - a recovery path failed re-verification or missed the goal. Nothing is forwarded and the robot halts, the same action as `halted_no_safe_path`; the bucket stays separate because reaching it means the inflation margin failed, which is a defect in the composition. Must be 0, and CI fails on it |
@@ -147,8 +154,15 @@ a guard on an argument, not evidence that recoveries happen to come out safe.
 
 The forty committed scenarios are procedurally generated: fully observed,
 walled on every side, and placed at the world origin. Real costmaps are
-none of those things, so the shield was also replayed on local costmaps
-built from a public ROS bag of 2D lidar
+none of those things. Three public ROS bags supply what the synthetic set
+cannot, each one adding what the last was missing: single scans, then a
+transform tree with odometry, then live localisation.
+
+### From single scans
+
+The first bag carries 2D lidar and no poses at all, so each scan becomes
+one robot-centred local costmap, which is what nav2's local costmap
+already is: a rolling window rebuilt from recent sensor data
 ([reports/results/bag_replay_summary.txt](reports/results/bag_replay_summary.txt),
 derived by [tools/bag_to_scenarios.py](tools/bag_to_scenarios.py)).
 
@@ -298,22 +312,49 @@ make eval
 ```
 
 No model inference, no GPU, no API: the evaluation replays the committed
-upstream dataset deterministically on any CPU. CI does the same on every
-push and fails on any `fallback_unsafe` or sealed-goal violation, and on a sealed-goal suite that did not run in full: counting only violations would let a dataset that never reached the sealed branch report zero and pass.
+upstream dataset deterministically on any CPU, and CI does the same on
+every push.
 
-`make test` covers the two map properties the committed scenarios cannot
-exercise, because every one of them has a walled border and sits at the
-world origin: a costmap whose edge cells are free, where a recovery may
-hug the boundary and leave the map under the robot's footprint, and a
-grid placed anywhere else in the world. Both run in CI alongside the
-replay.
+Re-verification runs the same binary against a plan already in flight:
+
+```bash
+build/shield --mode reverify --parsed <plans> --scenarios <current maps> \
+    --out reverify.csv
+```
+
+The bag replays are the only part that needs the network. Each summary
+under [reports/results/](reports/results) names its bag, its checksum and
+the exact commands, and the derived grids are rebuilt on demand rather
+than committed.
+
+## What CI asserts on every push
+
+- **No unsafe recovery is ever forwarded.** `fallback_unsafe` must be 0 on
+  the committed replay, and it halts the robot as well as failing the run.
+  Its re-verification counterpart, `replacement_unsafe`, carries the same
+  rule, but the bag-derived maps it applies to are fetched rather than
+  committed, so CI asserts that behaviour through the tests instead of by
+  replaying it.
+- **The sealed-goal suite ran in full**, with all ten cases present and all
+  ten halting. Counting violations alone would let a dataset that never
+  reached the sealed branch report zero and pass, which is the difference
+  between a guarantee that held and one that was never tested.
+- **Eleven regression tests**, covering what the committed scenarios cannot
+  produce: free cells at the map edge, grids away from the world origin,
+  PGM comment lines and sidecar frames, the action each bucket produces,
+  and a plan that is safe on one map and unsafe on the next.
+
+CI runs the tests and the committed replay, both on the synthetic dataset.
+The bag results in this README were produced locally and are recorded in
+the summaries rather than re-run on every push, because each needs its bag
+downloaded first.
 
 ## How this fits the research program
 
 - [plan-failure-bench](https://github.com/munawarkazmi/plan-failure-bench) measures *how* LLM planners fail;
 - [ros2-llm-safety-verifier](https://github.com/munawarkazmi/ros2-llm-safety-verifier) *detects* those failures deterministically;
 - [ros2-dynamic-path-planning](https://github.com/munawarkazmi/ros2-dynamic-path-planning) plans *provably-correct* paths;
-- **this repository** closes the loop: detect, then recover with a guaranteed-safe alternative, or halt when none exists.
+- **this repository** closes the loop: detect, then recover with a guaranteed-safe alternative, or halt when none exists, and re-check a plan already in flight when the map beneath it moves.
 
 ## License
 
