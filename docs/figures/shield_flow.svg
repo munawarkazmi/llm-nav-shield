@@ -36,7 +36,7 @@
   <!-- Re-verify -->
   <rect x="640" y="200" width="250" height="70" rx="12" fill="#123a5f"/>
   <text x="765" y="228" text-anchor="middle" font-size="13.5" font-weight="700" fill="#d9a441">Re-verify the recovery</text>
-  <text x="765" y="249" text-anchor="middle" font-size="11.5" fill="#dfe7ef">verifier + independent oracle + goal check</text>
+  <text x="765" y="249" text-anchor="middle" font-size="11.5" fill="#dfe7ef">verifier + a finer-sampled second pass + goal check</text>
 
   <!-- Halt -->
   <rect x="270" y="340" width="250" height="70" rx="12" fill="#eceff2" stroke="#8a8f98" stroke-width="2"/>

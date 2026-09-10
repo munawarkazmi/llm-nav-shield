@@ -2,8 +2,12 @@
 //
 // llm-nav-shield: detect-and-recover pipeline composing two verified
 // cores, pinned as git submodules at exact commits:
-//   deps/verifier - deterministic trajectory verifier + independent
-//                   reference oracle (ros2-llm-safety-verifier)
+//   deps/verifier - deterministic trajectory verifier + a reference
+//                   checker sampling four times finer along each segment
+//                   (ros2-llm-safety-verifier). The two share a footprint
+//                   model and a clearance expression, so the second is a
+//                   denser pass rather than an independent judge; see the
+//                   README on what their agreement is worth.
 //   deps/planning - exact-integer-cost planning core, validated against
 //                   Dijkstra ground truth (ros2-dynamic-path-planning)
 //
@@ -13,7 +17,7 @@
 // (A*, not D* Lite, deliberately: a one-shot static recovery gains
 // nothing from incremental replanning; the cores' own tests prove the
 // two return equally optimal paths). The fallback is then re-verified
-// by BOTH the verifier and the independent oracle before anything is
+// by BOTH the verifier and the reference checker before anything is
 // forwarded. No safe path -> the shield halts rather than inventing one.
 //
 // The forward gate is goal-aware: a proposal is forwarded only when it
@@ -74,7 +78,7 @@
 #include "planning/grid.hpp"
 #include "verifier/grid.hpp"
 #include "verifier/verifier.hpp"
-#include "scenarios.hpp"  // deps/verifier/core/eval - independent oracle
+#include "scenarios.hpp"  // deps/verifier/core/eval - reference checker
 
 namespace {
 

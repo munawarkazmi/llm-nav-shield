@@ -18,7 +18,7 @@ components**, pinned as git submodules at exact commits:
 
 | Component | Source | What it brings |
 | --- | --- | --- |
-| Trajectory verifier + independent oracle | [ros2-llm-safety-verifier](https://github.com/munawarkazmi/ros2-llm-safety-verifier) | deterministic safety checks; caught 35/35 unsafe qwen2.5-7B plans upstream, zero misses, CI-replayed |
+| Trajectory verifier + reference checker | [ros2-llm-safety-verifier](https://github.com/munawarkazmi/ros2-llm-safety-verifier) | deterministic safety checks; caught 35/35 unsafe qwen2.5-7B plans upstream, zero misses, CI-replayed |
 | Planning core (A*, D* Lite) | [ros2-dynamic-path-planning](https://github.com/munawarkazmi/ros2-dynamic-path-planning) | exact-integer-cost planners validated against Dijkstra over 185,237 fuzzed replans |
 | Evaluation dataset | committed upstream | 40 real qwen2.5:7b-instruct (temperature 0) trajectory proposals with their exact scenario grids |
 
@@ -102,14 +102,46 @@ ten constructed halt cases:
 - **qwen2.5:7b-instruct produced a plan that was both safe and goal-reaching
   in 2 of 40 scenarios.** The shield forwarded those two untouched.
 - The other 38 - 35 unsafe, 3 safe-but-wrong-destination - were **all
-  recovered** with fallback paths that passed the verifier, the independent
-  4x-finer oracle, and the goal check. Nothing unsafe was forwarded:
-  `fallback_unsafe = 0`, enforced by CI on every push.
+  recovered** with fallback paths that passed the verifier, a second pass at
+  four times the sampling density, and the goal check. Nothing unsafe was
+  forwarded: `fallback_unsafe = 0`, enforced by CI on every push. What that
+  zero is and is not worth is set out below.
 - On all **10 sealed-goal variants**, where no safe path exists, the shield
   **halted** rather than inventing a route - the branch that distinguishes a
   safety system from a demo, exercised and asserted.
 - The whole decision - verify, plan, re-verify twice - takes a median
   **0.53 ms** on x86-64. Timing varies with hardware; the counts do not.
+
+## What the two guarantees rest on
+
+Two claims above need their exact weight, and neither is quite what a quick
+read suggests.
+
+**The second checker is not an independent judge.** `scenarios::referenceSafe`
+is a re-implementation of the same footprint test, sharing the same clearance
+expression, differing only in sampling four times more finely along each
+segment. With a 0.105 m footprint stepped every 0.02 m, consecutive sampled
+circles overlap so heavily that the sliver the finer pass can see and the
+coarser cannot is 0.48 mm deep, about one percent of a cell. On the committed
+data the two agree on all 80 trajectories, the 40 proposals and the 40
+recoveries, with zero disagreements. So `fallback_unsafe = 0` is not two
+independent judges concurring. It is one rule applied twice, once more finely.
+
+**`fallback_unsafe = 0` is a regression check, not a discovery.** The recovery
+is planned on a grid whose lethal and unknown cells are inflated by the
+footprint plus one cell, 0.20 m at this resolution, and is then verified
+against a 0.105 m footprint. Any path on that grid clears the check by
+construction, and the measurement agrees: the closest any recovered path came
+to a lethal cell was 0.177 m, a 68 percent margin over what the verifier
+requires. The goal conjunct is tighter still, since A* is asked for the goal
+cell and the committed goals sit exactly on cell centres, so the recovery ends
+0 m from the goal against a 0.3 m threshold.
+
+Stated that way the cell keeps its name. It fails the build the moment the
+construction stops holding, and that is not hypothetical: on costmaps built
+from a real bag, where the map edge carries free cells the synthetic scenarios
+never had, the pre-fix shield produced 14 unsafe fallbacks in 40. The zero is
+a guard on an argument, not evidence that recoveries happen to come out safe.
 
 ## Replay on real sensor data
 

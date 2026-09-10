@@ -154,7 +154,7 @@ Safety and doing the job are separate questions. Scoring only one of them lets a
 
 When a proposal fails, the shield does not simply refuse. It sends the same start and goal to the classical planner, which computes a route on a fine-grained version of the map and is guaranteed to find the shortest safe one if any exists.
 
-That recovered route is then checked twice more before anything moves: once by the same safety checker, and once by an independent checker running at four times the resolution, which exists specifically so that a bug in the first one cannot pass unnoticed. It is also checked for actually reaching the goal.
+That recovered route is then checked twice more before anything moves: once by the same safety checker, and once by a second pass over the same rule sampling four times more finely. The second pass guards against a coarse sample stepping over a thin obstacle. It is not an independent opinion, because it shares the first one's model of the robot, and on this data the two have never disagreed. The route is also checked for actually reaching the goal.
 
 \begin{figure}[t]
 \centering
