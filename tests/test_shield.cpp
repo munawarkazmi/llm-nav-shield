@@ -327,6 +327,60 @@ void testActionMatchesBucket() {
   CHECK(!halted.forwarded, "halted_no_safe_path must forward nothing");
 }
 
+// ------------------------------------------------------ re-verification
+
+// A plan is only valid against the map it was checked on. When the map
+// changes under it, re-running the same checks must never call a plan
+// that has stopped verifying still valid.
+void testStalePlanIsNeverKept() {
+  const verifier::Params params;
+  planning::AStarPlanner astar;
+
+  // Map A: a clear corridor. A straight run down it is safe.
+  verifier::Grid a = room(60, 60, {0.0, 0.0}, true, 30, 0, 0);
+  Record plan{};
+  plan.parse_ok = true;
+  plan.start = {0.575, 0.575};
+  plan.goal = {0.575, 2.375};
+  plan.traj = straight(plan.start, plan.goal);
+
+  const Outcome on_a = runShield(a, plan, params, astar);
+  CHECK(on_a.bucket == "forwarded_safe", "the plan must be safe on map A, got %s",
+        on_a.bucket.c_str());
+  CHECK(std::string(reverifyBucket(on_a.bucket)) == "plan_still_valid",
+        "a plan that verifies is still valid");
+
+  // Map B: the same corridor with an obstacle dropped onto the plan.
+  verifier::Grid b = a;
+  for (std::size_t y = 28; y <= 32; ++y) {
+    for (std::size_t x = 9; x <= 13; ++x) b.setCost(x, y, verifier::kLethal);
+  }
+  const Outcome on_b = runShield(b, plan, params, astar);
+  CHECK(on_b.bucket != "forwarded_safe",
+        "the plan runs through a new obstacle and must not still verify, got %s",
+        on_b.bucket.c_str());
+  CHECK(std::string(reverifyBucket(on_b.bucket)) != "plan_still_valid",
+        "a stale plan must never be reported as still valid");
+
+  // Whatever happens next, it is either a re-verified replacement that is
+  // forwarded, or a halt. Never the stale plan.
+  const std::string verdict = reverifyBucket(on_b.bucket);
+  CHECK(verdict == "plan_replaced" || verdict == "plan_void_halt",
+        "a stale plan resolves to a replacement or a halt, got %s", verdict.c_str());
+  if (verdict == "plan_void_halt") CHECK(!on_b.forwarded, "a void plan halts");
+  if (verdict == "plan_replaced") CHECK(on_b.forwarded, "a replacement is forwarded");
+}
+
+void testReverifyVocabulary() {
+  CHECK(std::string(reverifyBucket("forwarded_safe")) == "plan_still_valid", "still valid");
+  CHECK(std::string(reverifyBucket("recovered_from_unsafe")) == "plan_replaced", "replaced");
+  CHECK(std::string(reverifyBucket("recovered_from_off_goal")) == "plan_replaced",
+        "off-goal also means replaced");
+  CHECK(std::string(reverifyBucket("halted_no_safe_path")) == "plan_void_halt", "void");
+  CHECK(std::string(reverifyBucket("fallback_unsafe")) == "replacement_unsafe",
+        "the load-bearing cell keeps its role under the other name");
+}
+
 void testDatasetLoaders() {
   const char* parsed_path = "build/test_shield_parsed.txt";
   {
@@ -371,6 +425,8 @@ int main() {
   testDecisionIsIndependentOfOrigin();
   testSealedGoalStillHalts();
   testActionMatchesBucket();
+  testStalePlanIsNeverKept();
+  testReverifyVocabulary();
   testDatasetLoaders();
 
   if (g_failures == 0) {

@@ -60,10 +60,18 @@ map, so the shield would halt rather than forward anything.
 
 That is the fail-safe direction and it is worth saying plainly: the
 shield does not forward a stale plan. It re-verifies and refuses. But it
-only does so if something asks it to. The pipeline verifies once, when a
-proposal arrives. Nothing in it re-checks a plan because localisation
-moved the map underneath it, and at 439 corrections in 322 seconds a
-forwarded plan meets a correction roughly every 0.7 s.
+only does so if something asks it to, and when this experiment was first
+run nothing did: the pipeline verified once, when a proposal arrived, and
+nothing re-checked a plan because localisation had moved the map beneath
+it. At 439 corrections in 322 seconds a forwarded plan meets one roughly
+every 0.7 s.
+
+That gap is now closed on the shield's side. --mode reverify runs the
+same decision procedure against a plan already in flight and reports
+plan_still_valid, plan_replaced or plan_void_halt, with replacement_unsafe
+as the cell that must stay 0. On these pairs it returns 21, 0 and 5, the
+same five plans found here. Deciding when to call it remains a question
+for the surrounding system, which owns the map.
 
 Correction size does not predict breakage
 -----------------------------------------
@@ -96,4 +104,7 @@ Reproduce
   build/shield --parsed <straight-line proposals> \
       --scenarios /tmp/map_scen/before/scenarios --out before.csv \
       --dump-dir /tmp/map_scen/dumps
-  # then re-verify the forwarded plans against /tmp/map_scen/after/scenarios
+  # collect the plans that were forwarded, then re-verify them against the
+  # map as it stands after the correction:
+  build/shield --mode reverify --parsed forwarded.txt \
+      --scenarios /tmp/map_scen/after/scenarios --out reverify.csv

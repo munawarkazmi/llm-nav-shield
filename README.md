@@ -235,6 +235,50 @@ what separates them is how much of the map moved, 6.38% of cells against
 
 None of the three bags is closed-loop: no robot ever reacts to a halt.
 
+## Re-verifying a plan in flight
+
+A forwarded plan is only valid against the map it was checked on, and a
+one-shot pipeline never notices when that stops being true. On the bag
+above it stops being true often: 5 of 26 plans the shield had passed no
+longer verified after a single localisation correction, and the localiser
+corrects roughly every 0.7 s.
+
+`--mode reverify` runs the same decision procedure with the plan already
+in flight standing in for the proposal. It needs no new logic, only a
+vocabulary that says the right thing about a plan forwarded some time ago:
+
+| Outcome | Meaning |
+| --- | --- |
+| `plan_still_valid` | verifies against the new map; keep going |
+| `plan_replaced` | stale; a re-verified replacement was planned and forwarded |
+| `plan_void_halt` | stale and nothing safe remains; stop |
+| `replacement_unsafe` | a replacement failed re-verification; must be 0, and CI fails on it |
+
+Run over the localisation pairs, against the 26 plans the shield had
+forwarded before the correction:
+
+```text
+llm-nav-shield: re-verifying 26 plans already in flight against the current map
+  plan_still_valid     21   (still verifies against the new map; keep going)
+  plan_replaced        0   (stale; a re-verified replacement was planned)
+  plan_void_halt       5   (stale and nothing safe remains; stop)
+  replacement_unsafe   0   <-- the load-bearing cell; must be 0 (halts, and fails the run)
+action taken: 21 forwarded to the controller, 5 halted
+PASS: no stale plan kept, no unsafe replacement forwarded
+```
+
+Those are the same five the localisation experiment found, now named by
+the shield rather than by a script wrapped around it. A stale plan is
+never kept: `plan_still_valid` is reached only by re-running the checks
+that first admitted the plan, and a test asserts that a plan safe on one
+map and unsafe on the next never lands there.
+
+What this does not do is decide *when* to re-verify. That belongs to the
+surrounding system, which has to hand the shield a new map; this
+repository has no runtime and does not pretend to. What it has now is the
+operation itself, named, with an outcome for every case and a cell that
+fails the build.
+
 ## Plain-language guide
 
 For a non-specialist reader there is a six-page guide,
