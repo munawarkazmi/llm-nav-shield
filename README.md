@@ -295,12 +295,13 @@ fails the build.
 
 ## Plain-language guide
 
-For a non-specialist reader there is a six-page guide,
+For a non-specialist reader there is a seven-page guide,
 [docs/explainer/explainer.pdf](docs/explainer/explainer.pdf), which walks
 the three outcomes end to end, quotes the real proposal that changed the
-decision gate, and explains why the halt branch is the one that matters.
-Its source is committed alongside it and builds with `latexmk -pdf
-explainer.tex`.
+decision gate, explains why the halt branch is the one that matters, and
+covers what changed when the tidy generated maps were replaced by
+recordings from three real robots. Its source is committed alongside it
+and builds with `latexmk -pdf explainer.tex`.
 
 ## Reproduce
 

@@ -7,7 +7,9 @@
 %
 % When the evaluation changes, the counts in "What the model actually
 % proposed" and "The cell that must be zero" must be re-checked against
-% reports/results/shield_eval_summary.txt. They are prose, so nothing
+% reports/results/shield_eval_summary.txt, and the figures in the two
+% sections on real sensor data against reports/results/bag_replay_summary.txt,
+% bag_tf_summary.txt and bag_map_summary.txt. They are prose, so nothing
 % enforces them.
 \documentclass[11pt,a4paper]{article}
 
@@ -103,7 +105,7 @@ llm-nav-shield sits between the language model and the robot. Every proposed rou
 \item \textbf{Recovered from unsafe}, if the route would hit something: a classical planner computes a provably correct route instead, which is then re-checked before anything moves.
 \item \textbf{Recovered from off-goal}, if the route is perfectly safe but does not go where it was asked to go.
 \item \textbf{Halted}, if no safe route exists at all.
-\item \textbf{Fallback unsafe}, if the replacement route itself failed the checks. This one must never happen, and the automated tests fail the build if it ever does.
+\item \textbf{Fallback unsafe}, if the replacement route itself failed the checks. The robot stops, exactly as it would if no route existed at all, and the automated tests fail the build. This one must never happen.
 \end{itemize}
 
 Two details matter more than they look. First, those five outcomes were written down and committed to the repository \emph{before} any results were published, so there is no possibility of inventing a flattering category after seeing the data. Second, the word ``shield'' is not decoration: it follows established usage from safety research, where a shield is a component that sits in front of a learned system and enforces what it is allowed to do.
@@ -188,19 +190,49 @@ Every one of the five outcomes is counted, and the counts are printed by a singl
 
 That is the difference between a system that reports how well it did and a system that cannot be merged if it did badly. The claim is not ``we tested it and it worked''. The claim is ``it cannot be changed in a way that breaks this without the change being refused''.
 
+It is worth being exact about what that zero is worth, because it is easy to read as more than it is. The replacement is planned on a version of the map where every obstacle has been fattened by more than the width of the robot, and is then checked against the robot's actual width. It clears by a wide margin, and it was always going to: the closest any replacement came to an obstacle was 17.7 centimetres, where 10.5 would have been enough. So the zero is not a discovery that replacements happen to come out safe. It is a tripwire on an argument that says they must be.
+
+Tripwires are only worth having if they can fire. This one did, the moment the maps stopped being generated ones.
+
 Reproducing all of it requires no AI model, no graphics card, and no internet access. The forty model responses are committed, so the evaluation replays them deterministically on any computer, and the automated tests do exactly that on every change.
+
+\section{Then it met real sensor data}
+
+Everything above happens on maps that were generated for the purpose. They are tidy: fully surveyed, walled all the way round, and placed neatly at the origin of the coordinate system. The maps a robot actually builds, from its own laser scanner as it moves, are none of those things.
+
+So the whole system was run again on recordings from three real robots, taken from public archives: a laser scanner carried through a museum, a warehouse robot in a corridor, and a research robot in an office cafe. Three things turned up that forty tidy maps could not have shown.
+
+\textbf{A real map has an edge, and the robot can walk off it.} A map stops where the sensor stopped seeing. The cells along that edge are empty rather than walled, and the planner was perfectly happy to route along them, which puts the robot half outside the world it knows about. On the museum recording that produced an unsafe replacement route in 14 cases out of 40. On the generated maps it had never happened once, because every one of them is surrounded by a wall. That is the tripwire firing.
+
+\textbf{A map can be wrong by being late.} Laser readings carry a timestamp saying when they were taken, about 25 milliseconds before the computer receives them. Building the map from the wrong one of those two times puts the readings slightly out of place. It moved about 3 per cent of the map, and it changed the shield's decision three times out of 79. One of those turned a correct ``there is no safe route here'' into a confident route that did not exist.
+
+That last one marks the edge of what this system can promise, so it is worth stating flatly. The shield checks a route against the map it is handed. If the map is wrong, the check is still carried out correctly and the answer is still wrong. Everything here rests on the map being right.
+
+\section{A route can go stale while you are driving it}
+
+The third recording had something the other two lacked. That robot knew where it was on a building-wide map, and kept correcting that estimate as it went. The corrections are small, a few centimetres, and they arrive more than once a second.
+
+A correction moves the map relative to the robot. A route that was checked and approved a moment ago is suddenly being driven through a world that has shifted underneath it.
+
+Of 26 routes the shield had approved, 5 were no longer safe after a single correction. Nothing moved in the room. The robot's idea of where it was had simply been nudged.
+
+The shield's answer was right in all five. It refused to keep the route, and since no replacement existed either, it stopped. But it only answered because it was asked to check again, and nothing in the original design ever asked. A route, once approved, stayed approved for good.
+
+Checking again is now something the system does, with three answers of its own: the route still holds, the route is stale and here is a replacement, or the route is stale and there is nothing safe left to do. Deciding \emph{when} to ask is a different job, belonging to whatever holds the map, and this repository does not pretend to do it.
 
 \section{What this does not show}
 
-One model, at one setting, on forty scenarios, plus ten halt cases built by hand. All of it in simulation: no physical robot was involved at any point. The claims here are about this system's behaviour on this committed data, not about language models in general, and the timing figure depends on the machine it runs on while the counts do not.
+One model, at one setting, on forty generated scenarios, plus ten halt cases built by hand, plus recordings from three real robots. The claims here are about this system's behaviour on that data, not about language models in general, and the timing figure depends on the machine it runs on while the counts do not.
 
-The obvious next step is real hardware, and the honest statement is that it has not happened yet.
+The sensor data is real, but nothing here is closed-loop. Every robot in those recordings was driven by something else, and none of them ever reacted to this system saying stop. The recordings also differ from each other in ways that matter: the 14 unsafe replacements on the museum map do not reappear on the warehouse one, because the corridor walls block the routes that would have hugged the edge. A fault can be real and still not fire everywhere.
+
+No physical robot has yet been driven by this system, and that remains the obvious next step.
 
 \section{Why it matters}
 
 Language models are being connected to things that move. The interesting question is not whether they are sometimes wrong, because they obviously are. The question is what the surrounding system does about it, and whether it can tell the difference between a fixable mistake and a situation with no safe answer.
 
-Detect, recover, or halt. Three outcomes, chosen mechanically, with the dangerous one ruled out by a test that fails the build.
+Detect, recover, or halt. Three outcomes, chosen mechanically, with the dangerous one ruled out by a test that fails the build. And then, because a map does not hold still, the willingness to ask the same question again about a route already being driven.
 
 \vspace{6pt}
 {\color{rule}\hrule height 1pt}
