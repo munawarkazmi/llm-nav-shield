@@ -25,7 +25,7 @@ components**, pinned as git submodules at exact commits:
 
 | Component | Source | What it brings |
 | --- | --- | --- |
-| Trajectory verifier + reference checker | [ros2-llm-safety-verifier](https://github.com/munawarkazmi/ros2-llm-safety-verifier) | deterministic safety checks; caught 35/35 unsafe qwen2.5-7B plans upstream, zero misses, CI-replayed |
+| Trajectory verifier + reference checker | [ros2-llm-safety-verifier](https://github.com/munawarkazmi/ros2-llm-safety-verifier) | deterministic safety checks; caught 35/35 unsafe qwen2.5-7B plans upstream and 32/32 from llama-3.3-70b, zero misses either way, CI-replayed |
 | Planning core (A*, D* Lite) | [ros2-dynamic-path-planning](https://github.com/munawarkazmi/ros2-dynamic-path-planning) | exact-integer-cost planners validated against Dijkstra over 185,237 fuzzed replans |
 | Evaluation dataset | committed upstream | 40 real qwen2.5:7b-instruct (temperature 0) trajectory proposals with their exact scenario grids |
 
