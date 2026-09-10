@@ -350,6 +350,39 @@ The bag results in this README were produced locally and are recorded in
 the summaries rather than re-run on every push, because each needs its bag
 downloaded first.
 
+## Why it is arranged this way
+
+The pre-registered buckets, the committed dataset, the figures regenerated from
+the run's own dumps, the cell that fails the build: none of that is house
+style. It is the answer to a specific loss.
+
+An earlier project in this programme reported results from trials on physical
+robot hardware. The machine holding those runs failed and the logs went with
+it, which left figures that nobody could check, this author included. A number
+whose evidence no longer exists is not a result whatever happened on the day it
+was taken, so it was withdrawn rather than restated on trust.
+[ros2-llm-safety-verifier](https://github.com/munawarkazmi/ros2-llm-safety-verifier) and
+[ros2-dynamic-path-planning](https://github.com/munawarkazmi/ros2-dynamic-path-planning) both carry that
+withdrawal in their own histories rather than quietly tidying it away.
+
+This repository was built afterwards, and takes the lesson a step further than
+re-derivability. Records you can re-derive still let you choose what to count
+once you have seen the data. So the five outcome buckets and the sealed-goal
+suite were committed in `94687b3`, which contains the source, the CI workflow
+and this README and no results at all, and the numbers arrived one commit later
+in `3aae82c` touching nothing but the CSV, the summary and one README section.
+There was no opportunity to invent a flattering category after the fact.
+
+The same standard governs what is not claimed. The bag replays are recorded
+with the checksum of each bag and the commands that derive them; the two
+guarantees above are given their exact weight rather than their most
+flattering; and where a measurement failed to reproduce on a second dataset,
+both summaries say so.
+
+Evidence that lives on one machine can be lost. Evidence that is committed,
+re-derived on every change, and written down before the answer is known cannot
+be quietly reshaped afterwards.
+
 ## How this fits the research program
 
 - [plan-failure-bench](https://github.com/munawarkazmi/plan-failure-bench) measures *how* LLM task planners fail: one planted trap per instruction, answers in a machine-checkable action language, every label a proof, and no human or model judging anywhere;

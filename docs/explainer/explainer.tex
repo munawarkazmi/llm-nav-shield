@@ -228,6 +228,18 @@ The sensor data is real, but nothing here is closed-loop. Every robot in those r
 
 No physical robot has yet been driven by this system, and that remains the obvious next step.
 
+\section{Why it is arranged this way}
+
+The five outcomes written down before any result existed, the model's forty answers committed beside the maps they were looking at, the figures drawn from the run's own output, the count that fails the build: none of that is house style. It is the answer to a specific loss.
+
+An earlier project by the same author reported results from trials on physical robot hardware. The machine holding those runs failed, and the logs went with it. What remained was a set of numbers nobody could check, the author included. A figure whose evidence no longer exists is not a result, whatever happened on the day it was taken, and the choice at that point is between asking readers to take it on trust and withdrawing it. It was withdrawn, and the repository that published it still carries the withdrawal in plain sight.
+
+This system was built afterwards, and takes the lesson one step further. Records you can regenerate still let you decide what to count after you have seen the answer. So the five outcomes here were committed before a single result was produced, and the results arrived in a later change that added nothing but the numbers. There was no opportunity to choose a flattering category once the data was in, and the version history shows it.
+
+\begin{quotebox}
+Evidence that lives on one machine can be lost. Evidence that is committed, re-derived whenever the code changes, and written down before the answer is known cannot be quietly reshaped afterwards. That is the whole reason this project looks the way it does.
+\end{quotebox}
+
 \section{Why it matters}
 
 Language models are being connected to things that move. The interesting question is not whether they are sometimes wrong, because they obviously are. The question is what the surrounding system does about it, and whether it can tell the difference between a fixable mistake and a situation with no safe answer.
