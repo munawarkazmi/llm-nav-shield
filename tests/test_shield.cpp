@@ -288,6 +288,45 @@ void testSealedGoalStillHalts() {
   }
 }
 
+// ------------------------------------------- forward or halt, per bucket
+
+// Every outcome says what the robot was told to do, and the two buckets
+// that forward nothing must both say halt. fallback_unsafe is the one
+// that used to be ambiguous: it is a failure of the composition, but the
+// action it produces is a halt, not a forward.
+void testActionMatchesBucket() {
+  const verifier::Params params;
+  planning::AStarPlanner astar;
+
+  const verifier::Grid walled = room(60, 60, {0.0, 0.0}, true, 30, 0, 40);
+
+  // safe and at the goal: forwarded untouched
+  Record straight_r{};
+  straight_r.parse_ok = true;
+  straight_r.start = {0.575, 0.575};
+  straight_r.goal = {0.575, 2.575};
+  straight_r.traj = straight(straight_r.start, straight_r.goal);
+  const Outcome fwd = runShield(walled, straight_r, params, astar);
+  CHECK(fwd.bucket == "forwarded_safe", "expected forwarded_safe, got %s",
+        fwd.bucket.c_str());
+  CHECK(fwd.forwarded, "forwarded_safe must forward");
+
+  // unsafe with a recovery available: the recovery is forwarded
+  const Outcome rec = runShield(walled, record({0.575, 0.575}, {2.425, 0.575}),
+                                params, astar);
+  CHECK(rec.bucket == "recovered_from_unsafe", "expected a recovery, got %s",
+        rec.bucket.c_str());
+  CHECK(rec.forwarded, "a re-verified recovery must forward");
+
+  // sealed goal: nothing exists, so nothing is forwarded
+  const Record sealed_r = record({0.575, 0.575}, {2.425, 0.575});
+  const Outcome halted = runShield(sealGoal(walled, sealed_r.goal), sealed_r,
+                                   params, astar);
+  CHECK(halted.bucket == "halted_no_safe_path", "expected a halt, got %s",
+        halted.bucket.c_str());
+  CHECK(!halted.forwarded, "halted_no_safe_path must forward nothing");
+}
+
 void testDatasetLoaders() {
   const char* parsed_path = "build/test_shield_parsed.txt";
   {
@@ -331,6 +370,7 @@ int main() {
   testPgmCommentRoundTrip();
   testDecisionIsIndependentOfOrigin();
   testSealedGoalStillHalts();
+  testActionMatchesBucket();
   testDatasetLoaders();
 
   if (g_failures == 0) {

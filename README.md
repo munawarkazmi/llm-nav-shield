@@ -60,7 +60,7 @@ published results):
 | `recovered_from_unsafe` | LLM plan unsafe; fallback re-verified safe by verifier **and** oracle, and goal-reaching |
 | `recovered_from_off_goal` | LLM plan safe but off-goal; fallback as above |
 | `halted_no_safe_path` | no safe path exists; halt rather than invent |
-| `fallback_unsafe` | **the load-bearing cell** - a recovery path failed re-verification or missed the goal; must be 0, and CI fails on it |
+| `fallback_unsafe` | **the load-bearing cell** - a recovery path failed re-verification or missed the goal. Nothing is forwarded and the robot halts, the same action as `halted_no_safe_path`; the bucket stays separate because reaching it means the inflation margin failed, which is a defect in the composition. Must be 0, and CI fails on it |
 
 Because the committed qwen scenarios guarantee a reachable goal, they cannot
 exercise the halt branch; a **sealed-goal suite** derives deterministic
@@ -78,9 +78,10 @@ llm-nav-shield: replaying 40 committed qwen2.5:7b-instruct (temperature 0) propo
   recovered_from_unsafe   35   (re-verified by verifier AND oracle, AND goal-reached)
   recovered_from_off_goal 3   (LLM plan was safe but went to the wrong place)
   halted_no_safe_path     0   (expected 0 here: these scenarios guarantee a reachable goal)
-  fallback_unsafe         0   <-- the load-bearing cell; must be 0
-sealed-goal halt suite: 10/10 correctly halted, 0 violations (must be 0)
-shield decision time: median 0.48 ms, max 1.40 ms (verify + plan + re-verify, x86-64)
+  fallback_unsafe         0   <-- the load-bearing cell; must be 0 (halts, and fails the run)
+action taken: 40 forwarded to the controller, 0 halted
+sealed-goal halt suite: 10/10 correctly halted, 0 violations (must be 0), 10 of 10 scenarios present
+shield decision time: median 0.53 ms, max 1.32 ms (verify + plan + re-verify, x86-64)
 PASS: no unsafe fallback forwarded; every sealed goal produced a halt, not an invention
 ```
 
@@ -108,7 +109,7 @@ ten constructed halt cases:
   **halted** rather than inventing a route - the branch that distinguishes a
   safety system from a demo, exercised and asserted.
 - The whole decision - verify, plan, re-verify twice - takes a median
-  **0.48 ms** on x86-64. Timing varies with hardware; the counts do not.
+  **0.53 ms** on x86-64. Timing varies with hardware; the counts do not.
 
 ## Replay on real sensor data
 
@@ -222,7 +223,7 @@ make eval
 
 No model inference, no GPU, no API: the evaluation replays the committed
 upstream dataset deterministically on any CPU. CI does the same on every
-push and fails on any `fallback_unsafe` or sealed-goal violation.
+push and fails on any `fallback_unsafe` or sealed-goal violation, and on a sealed-goal suite that did not run in full: counting only violations would let a dataset that never reached the sealed branch report zero and pass.
 
 `make test` covers the two map properties the committed scenarios cannot
 exercise, because every one of them has a walled border and sits at the
